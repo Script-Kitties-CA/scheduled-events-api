@@ -2,7 +2,7 @@ version: "3"
 
 services:
   scheduled-events-api:
-    image: scheduled-events-api:latest
+    build: .
     container_name: scheduled-events-api
     ports:
       - "5000:5000"
