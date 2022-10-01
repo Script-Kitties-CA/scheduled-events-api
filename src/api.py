@@ -69,13 +69,13 @@ class Events:
 
         SLEEP_TIME = 10     # Discord API rate limits.
 
-        logging.info("Initializing events from Discord API...")
+        app.logger.info("Initializing events from Discord API...")
 
         while not self.get_events_http():
-            logging.error(f"Waiting {SLEEP_TIME} seconds.")
+            app.logger.error(f"Sleeping for {SLEEP_TIME} seconds.")
             time.sleep(SLEEP_TIME)
 
-        logging.info("Event initialization complete.")
+        app.logger.info("Event initialization complete.")
 
 
     def get_events_http(self):
@@ -103,7 +103,7 @@ class Events:
                 return True
 
             else:
-                logging.error(f"Discord API request failed: {response.text}")
+                app.logger.error(f"Discord API request failed:\n{response.text}")
                 return False
 
     def check_last_access(self):
@@ -144,3 +144,7 @@ init()
 
 if __name__ == "__main__":
     app.run()
+else:
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
