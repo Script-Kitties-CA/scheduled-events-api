@@ -1,0 +1,4 @@
+quart
+python-dotenv
+discord.py
+requests
