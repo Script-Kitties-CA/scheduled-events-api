@@ -20,4 +20,4 @@ or
 docker-compose up -d
 ```
 
-It can then be access through http://127.0.0.1:5000.
+It can then be accessed through http://127.0.0.1:5000.
