@@ -3,7 +3,7 @@ import time
 import os
 import logging
 
-from flask import Flask
+from flask import Flask, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,8 +23,8 @@ class Event:
         self.start_time = start_time
         self.end_time = end_time
 
-    def to_json(self):
-        """Return the event in JSON format."""
+    def to_dict(self):
+        """Return the event in a dictionary format."""
 
         json = {
             "name": self.name,
@@ -118,7 +118,7 @@ class Events:
 
         for event in self._events.values():
             event_list.append(
-                event.to_json()
+                event.to_dict()
             )
 
         event_list.sort(key=lambda x: x["start_time"])
@@ -132,7 +132,7 @@ def send_events():
     if events.check_last_access():
         events.get_events_http()
 
-    return events.get_json(), 200
+    return jsonify(events.get_json()), 200
 
 def init():
     """Main."""
