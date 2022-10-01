@@ -10,4 +10,4 @@ COPY . /app
 
 WORKDIR /app/src
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "api:app"]
+CMD ["gunicorn", "--access-logfile", "-", "--bind", "0.0.0.0:5000", "api:app"]
