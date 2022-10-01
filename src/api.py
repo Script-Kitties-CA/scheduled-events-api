@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SERVER_ID = os.environ["SERVER_ID"]
+SERVER_ID = int(os.environ["SERVER_ID"])
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
 HIDDEN_STR = "hidden"
@@ -62,7 +62,7 @@ class Events:
     def update_event(self, event_id, event):
         """Updates an event."""
 
-        self._events[event_id] = event
+        self._events[int(event_id)] = event
 
     def delete_event(self, event_id):
         """Removes an event."""
@@ -76,6 +76,8 @@ class Events:
 
         SLEEP_TIME = 10     # Discord API rate limits.
 
+        print("Initializing events from Discord API...")
+
         while True:
             headers = {"Authorization": f"Bot {BOT_TOKEN}"}
             endpoint = f"https://discord.com/api/guilds/{SERVER_ID}/scheduled-events"
@@ -85,6 +87,7 @@ class Events:
             if response.status_code == 200:
                 for event in response.json():
                     if event["description"] is None or HIDDEN_STR not in event["description"]:
+                        print(event["name"], event["id"])
                         self.add_event(
                             event["id"],
                             Event(
@@ -96,7 +99,10 @@ class Events:
 
                 break
             else:
+                print(f"Waiting {SLEEP_TIME} seconds. Discord API request failed: {response.text}")
                 time.sleep(SLEEP_TIME)
+
+        print("Event initialization complete.")
 
     def get_json(self):
         """Returns a list of all events in JSON format."""
@@ -113,13 +119,15 @@ class Events:
         return event_list
 
 class Client(discord.Client):
+    """Discord bot."""
+
     async def on_ready(self):
         print('Logged on as', self.user)
 
     async def on_scheduled_event_create(self, event):
         """When discord event is created."""
 
-        if not self.check_add_event(event):
+        if not self.check_event(event):
             return
 
         events.add_event(
@@ -131,10 +139,10 @@ class Client(discord.Client):
             )
         )
 
-    async def on_scheduled_event_update(self, _, event):
+    async def on_scheduled_event_update(self, before, event):
         """When a discord event is updated."""
 
-        if not self.check_add_event(event):
+        if not self.check_event(event):
             return
 
         events.update_event(
@@ -146,10 +154,13 @@ class Client(discord.Client):
             )
         )
 
-    def check_add_event(self, event):
+    def check_event(self, event):
         """Check if hidden string is in event description.
         Ensure event is deleted if it is.
         """
+
+        if event.guild_id != SERVER_ID:
+            return False
 
         if HIDDEN_STR in event.description:
             events.delete_event(event.id)
@@ -176,7 +187,7 @@ async def before_serving():
     await client.login(BOT_TOKEN)
     loop.create_task(client.connect())
 
-def main():
+def init():
     """Main."""
 
     global events, client, app
@@ -186,7 +197,7 @@ def main():
     intents = discord.Intents.default()
     client = Client(intents=intents)
 
-    app.run()
+init()
 
 if __name__ == "__main__":
-    main()
+    app.run()
