@@ -65,7 +65,7 @@ class Events:
         self._events.clear()
 
     def initialize(self):
-        """Hits the Discord API using HTTP to initialize the events on start."""
+        """Initialize the events on start."""
 
         SLEEP_TIME = 10     # Discord API rate limits.
 
@@ -79,39 +79,41 @@ class Events:
 
 
     def get_events_http(self):
-            headers = {"Authorization": f"Bot {BOT_TOKEN}"}
-            endpoint = f"https://discord.com/api/guilds/{SERVER_ID}/scheduled-events"
+        """Hits the Discord API using HTTP to get the events."""
 
-            response = requests.get(endpoint, headers=headers)
+        headers = {"Authorization": f"Bot {BOT_TOKEN}"}
+        endpoint = f"https://discord.com/api/guilds/{SERVER_ID}/scheduled-events"
 
-            if response.status_code == 200:
-                self.clear_events()
+        response = requests.get(endpoint, headers=headers)
 
-                for event in response.json():
-                    if event["description"] is None or Events.HIDDEN_STR not in event["description"]:
-                        self.add_event(
-                            event["id"],
-                            Event(
-                                event["name"],
-                                event["scheduled_start_time"],
-                                event["scheduled_end_time"]
-                            )
+        if response.status_code == 200:
+            self.clear_events()
+
+            for event in response.json():
+                if event["description"] is None or Events.HIDDEN_STR not in event["description"]:
+                    self.add_event(
+                        event["id"],
+                        Event(
+                            event["name"],
+                            event["scheduled_start_time"],
+                            event["scheduled_end_time"]
                         )
+                    )
 
-                self.last_access = time.time()
+            self.last_access = time.time()
 
-                return True
+            return True
 
-            else:
-                app.logger.error(f"Discord API request failed:\n{response.text}")
-                return False
+        else:
+            app.logger.error(f"Discord API request failed:\n{response.text}")
+            return False
 
     def check_last_access(self):
         """Return if cooldown has elapsed."""
 
         return time.time() - self.last_access >= Events.COOLDOWN
 
-    def get_json(self):
+    def get_event_list(self):
         """Returns a list of all events in JSON format."""
 
         event_list = []
@@ -132,7 +134,7 @@ def send_events():
     if events.check_last_access():
         events.get_events_http()
 
-    return jsonify(events.get_json()), 200
+    return jsonify(events.get_event_list()), 200
 
 def init():
     """Main."""
