@@ -23,7 +23,7 @@ class Event:
     def __init__(self, name, start_time, end_time, started):
         self.name = name
         self.start_time = start_time
-        self.end_time = end_time,
+        self.end_time = end_time
         self.started = started
 
     def to_dict(self):
