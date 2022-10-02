@@ -4,6 +4,7 @@ import os
 import logging
 
 from flask import Flask, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,6 +13,7 @@ SERVER_ID = int(os.environ["SERVER_ID"])
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
 app = Flask(__name__)
+CORS(app)
 
 events = None
 
