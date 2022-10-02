@@ -20,10 +20,11 @@ events = None
 class Event:
     """Event type to store a subset of scheduled event data."""
 
-    def __init__(self, name, start_time, end_time):
+    def __init__(self, name, start_time, end_time, started):
         self.name = name
         self.start_time = start_time
-        self.end_time = end_time
+        self.end_time = end_time,
+        self.started = started
 
     def to_dict(self):
         """Return the event in a dictionary format."""
@@ -31,7 +32,8 @@ class Event:
         json = {
             "name": self.name,
             "start_time": self.start_time,
-            "end_time": self.end_time
+            "end_time": self.end_time,
+            "started": self.started
         }
 
         return json
@@ -98,7 +100,8 @@ class Events:
                         Event(
                             event["name"],
                             event["scheduled_start_time"],
-                            event["scheduled_end_time"]
+                            event["scheduled_end_time"],
+                            event["status"] == 2
                         )
                     )
 
