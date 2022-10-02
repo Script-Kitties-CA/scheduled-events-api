@@ -128,7 +128,7 @@ class Events:
                 event.to_dict()
             )
 
-        event_list.sort(key=lambda x: x["start_time"])
+        event_list.sort(key=lambda x: (int(not x["started"]), x["start_time"]))
 
         return event_list
 
