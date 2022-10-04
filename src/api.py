@@ -47,7 +47,7 @@ class Events:
 
     def __init__(self):
         self._events = dict()
-        self._next_access = 0
+        self._next_access = time.time()
 
         self.get_events_http()
 
@@ -120,7 +120,7 @@ class Events:
     def check_access_rate(self):
         """Return if cooldown has elapsed."""
 
-        return self._next_access is None or time.time() >= self._next_access
+        return time.time() >= self._next_access
 
     def get_event_list(self):
         """Returns a list of all events in dict format."""
