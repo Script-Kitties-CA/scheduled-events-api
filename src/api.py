@@ -1,3 +1,4 @@
+from re import T
 import requests
 import time
 import os
@@ -41,12 +42,12 @@ class Event:
 class Events:
     """Stores events."""
 
-    COOLDOWN = 30
+    BACKUP_COOLDOWN = 15
     HIDDEN_STR = "hidden"
 
     def __init__(self):
         self._events = dict()
-        self.last_access = 0
+        self._next_access = 0
 
         self.get_events_http()
 
@@ -71,13 +72,11 @@ class Events:
     def initialize(self):
         """Initialize the events on start."""
 
-        SLEEP_TIME = 10     # Discord API rate limits.
-
         app.logger.info("Initializing events from Discord API...")
 
         while not self.get_events_http():
-            app.logger.error(f"Sleeping for {SLEEP_TIME} seconds.")
-            time.sleep(SLEEP_TIME)
+            app.logger.error(f"Sleeping for {self.BACKUP_COOLDOWN} seconds.")
+            time.sleep(self.BACKUP_COOLDOWN)
 
         app.logger.info("Event initialization complete.")
 
@@ -105,21 +104,26 @@ class Events:
                         )
                     )
 
-            self.last_access = time.time()
+            if int(response.headers["x-ratelimit-remaining"]) > 0:
+                self._next_access = time.time()
+            else:
+                self._next_access = time.time() + float(response.headers["x-ratelimit-reset-after"])
 
             return True
 
         else:
+            self._next_access = time.time() + self.BACKUP_COOLDOWN
+
             app.logger.error(f"Discord API request failed:\n{response.text}")
             return False
 
-    def check_last_access(self):
+    def check_access_rate(self):
         """Return if cooldown has elapsed."""
 
-        return time.time() - self.last_access >= Events.COOLDOWN
+        return self._next_access is None or time.time() >= self._next_access
 
     def get_event_list(self):
-        """Returns a list of all events in JSON format."""
+        """Returns a list of all events in dict format."""
 
         event_list = []
 
@@ -136,13 +140,13 @@ class Events:
 def send_events():
     """Returns events as API endpoint."""
 
-    if events.check_last_access():
+    if events.check_access_rate():
         events.get_events_http()
 
     return jsonify(events.get_event_list()), 200
 
 def init():
-    """Main."""
+    """Initialize."""
 
     global events
     events = Events()
