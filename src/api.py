@@ -89,6 +89,14 @@ class Events:
 
         response = requests.get(endpoint, headers=headers)
 
+        try:
+            if int(response.headers["x-ratelimit-remaining"]) > 0:
+                self._next_access = time.time()
+            else:
+                self._next_access = time.time() + float(response.headers["x-ratelimit-reset-after"])
+        except KeyError:
+            self._next_access = time.time() + self.BACKUP_COOLDOWN
+
         if response.status_code == 200:
             self.clear_events()
 
@@ -104,16 +112,9 @@ class Events:
                         )
                     )
 
-            if int(response.headers["x-ratelimit-remaining"]) > 0:
-                self._next_access = time.time()
-            else:
-                self._next_access = time.time() + float(response.headers["x-ratelimit-reset-after"])
-
             return True
 
         else:
-            self._next_access = time.time() + self.BACKUP_COOLDOWN
-
             app.logger.error(f"Discord API request failed:\n{response.text}")
             return False
 
