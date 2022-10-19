@@ -139,7 +139,7 @@ class Events:
 
 @app.route("/events", methods=["GET"])
 def send_events():
-    """Returns events as API endpoint."""
+    """Returns events with an API endpoint."""
 
     if events.check_access_rate():
         events.get_events_http()
