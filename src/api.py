@@ -1,11 +1,11 @@
-import asyncio
+from re import T
 import requests
 import time
 import os
-from datetime import datetime
+import logging
 
-import discord
-from quart import Quart
+from flask import Flask, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,36 +13,28 @@ load_dotenv()
 SERVER_ID = int(os.environ["SERVER_ID"])
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-HIDDEN_STR = "hidden"
-
-app = Quart(__name__)
+app = Flask(__name__)
+CORS(app)
 
 events = None
-client = None
 
 class Event:
     """Event type to store a subset of scheduled event data."""
 
-    def __init__(self, name, start_time, end_time):
+    def __init__(self, name, start_time, end_time, started):
         self.name = name
-        self.start_time = self.convert_time(start_time)
-        self.end_time = self.convert_time(end_time)
+        self.start_time = start_time
+        self.end_time = end_time
+        self.started = started
 
-    def convert_time(self, input_time):
-        """Converts datetime objects to ISO time strings."""
-
-        if type(input_time) == datetime:
-            return input_time.isoformat()
-
-        return input_time
-
-    def to_json(self):
-        """Return the event in JSON format."""
+    def to_dict(self):
+        """Return the event in a dictionary format."""
 
         json = {
             "name": self.name,
             "start_time": self.start_time,
-            "end_time": self.end_time
+            "end_time": self.end_time,
+            "started": self.started
         }
 
         return json
@@ -50,154 +42,121 @@ class Event:
 class Events:
     """Stores events."""
 
+    BACKUP_COOLDOWN = 15
+    HIDDEN_STR = "hidden"
+
     def __init__(self):
         self._events = dict()
+        self._next_access = time.time()
+
         self.get_events_http()
 
     def add_event(self, event_id, event):
         """Adds an event."""
 
-        self.update_event(event_id, event)
-
-    def update_event(self, event_id, event):
-        """Updates an event."""
-
         self._events[int(event_id)] = event
 
     def delete_event(self, event_id):
         """Removes an event."""
+
         try:
             self._events.pop(event_id)
         except KeyError:
             pass
 
+    def clear_events(self):
+        """Removes all events."""
+
+        self._events.clear()
+
+    def initialize(self):
+        """Initialize the events on start."""
+
+        app.logger.info("Initializing events from Discord API...")
+
+        while not self.get_events_http():
+            app.logger.error(f"Sleeping for {self.BACKUP_COOLDOWN} seconds.")
+            time.sleep(self.BACKUP_COOLDOWN)
+
+        app.logger.info("Event initialization complete.")
+
+
     def get_events_http(self):
-        """Hits the Discord API using HTTP to initialize the events on start."""
+        """Hits the Discord API using HTTP to get the events."""
 
-        SLEEP_TIME = 10     # Discord API rate limits.
+        headers = {"Authorization": f"Bot {BOT_TOKEN}"}
+        endpoint = f"https://discord.com/api/guilds/{SERVER_ID}/scheduled-events"
 
-        print("Initializing events from Discord API...")
+        response = requests.get(endpoint, headers=headers)
 
-        while True:
-            headers = {"Authorization": f"Bot {BOT_TOKEN}"}
-            endpoint = f"https://discord.com/api/guilds/{SERVER_ID}/scheduled-events"
-
-            response = requests.get(endpoint, headers=headers)
-
-            if response.status_code == 200:
-                for event in response.json():
-                    if event["description"] is None or HIDDEN_STR not in event["description"]:
-                        print(event["name"], event["id"])
-                        self.add_event(
-                            event["id"],
-                            Event(
-                                event["name"],
-                                event["scheduled_start_time"],
-                                event["scheduled_end_time"]
-                            )
-                        )
-
-                break
+        try:
+            if int(response.headers["x-ratelimit-remaining"]) > 0:
+                self._next_access = time.time()
             else:
-                print(f"Waiting {SLEEP_TIME} seconds. Discord API request failed: {response.text}")
-                time.sleep(SLEEP_TIME)
+                self._next_access = time.time() + float(response.headers["x-ratelimit-reset-after"])
+        except KeyError:
+            self._next_access = time.time() + self.BACKUP_COOLDOWN
 
-        print("Event initialization complete.")
+        if response.status_code == 200:
+            self.clear_events()
 
-    def get_json(self):
-        """Returns a list of all events in JSON format."""
+            for event in response.json():
+                if event["description"] is None or Events.HIDDEN_STR not in event["description"]:
+                    self.add_event(
+                        event["id"],
+                        Event(
+                            event["name"],
+                            event["scheduled_start_time"],
+                            event["scheduled_end_time"],
+                            event["status"] == 2
+                        )
+                    )
+
+            return True
+
+        else:
+            app.logger.error(f"Discord API request failed:\n{response.text}")
+            return False
+
+    def check_access_rate(self):
+        """Return if cooldown has elapsed."""
+
+        return time.time() >= self._next_access
+
+    def get_event_list(self):
+        """Returns a list of all events in dict format."""
 
         event_list = []
 
         for event in self._events.values():
             event_list.append(
-                event.to_json()
+                event.to_dict()
             )
 
-        event_list.sort(key=lambda x: x["start_time"])
+        event_list.sort(key=lambda x: (int(not x["started"]), x["start_time"]))
 
         return event_list
 
-class Client(discord.Client):
-    """Discord bot."""
-
-    async def on_ready(self):
-        print('Logged on as', self.user)
-
-    async def on_scheduled_event_create(self, event):
-        """When discord event is created."""
-
-        if not self.check_event(event):
-            return
-
-        events.add_event(
-            event.id,
-            Event(
-                event.name,
-                event.start_time,
-                event.end_time
-            )
-        )
-
-    async def on_scheduled_event_update(self, before, event):
-        """When a discord event is updated."""
-
-        if not self.check_event(event):
-            return
-
-        events.update_event(
-            event.id,
-            Event(
-                event.name,
-                event.start_time,
-                event.end_time
-            )
-        )
-
-    def check_event(self, event):
-        """Check if hidden string is in event description.
-        Ensure event is deleted if it is.
-        """
-
-        if event.guild_id != SERVER_ID:
-            return False
-
-        if HIDDEN_STR in event.description:
-            events.delete_event(event.id)
-            return False
-
-        return True
-
-    async def on_scheduled_event_delete(self, event):
-        """When a discord event is deleted."""
-
-        events.delete_event(event.id)
-
 @app.route("/events", methods=["GET"])
-async def send_events():
-    """Returns events as API endpoint."""
+def send_events():
+    """Returns events with an API endpoint."""
 
-    return events.get_json(), 200
+    if events.check_access_rate():
+        events.get_events_http()
 
-@app.before_serving
-async def before_serving():
-    """Starts the discord bot alongside quart."""
-
-    loop = asyncio.get_event_loop()
-    await client.login(BOT_TOKEN)
-    loop.create_task(client.connect())
+    return jsonify(events.get_event_list()), 200
 
 def init():
-    """Main."""
+    """Initialize."""
 
-    global events, client, app
-
+    global events
     events = Events()
-
-    intents = discord.Intents.default()
-    client = Client(intents=intents)
 
 init()
 
 if __name__ == "__main__":
     app.run()
+else:
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)

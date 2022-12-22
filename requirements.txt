@@ -1,4 +1,4 @@
-quart
+Flask
+flask-cors
 python-dotenv
-discord.py
 requests

@@ -1,11 +1,15 @@
 FROM python:3.10-alpine
 
-COPY . /app
+COPY requirements.txt /app/requirements.txt
 WORKDIR /app
 
 RUN pip3 install -r requirements.txt
-RUN pip3 install hypercorn
+RUN pip3 install gunicorn
+
+COPY . /app
+
+WORKDIR /app/src
 
 EXPOSE 5000
 
-CMD ["hypercorn", "--bind", "0.0.0.0:5000", "src/api:app"]
+CMD ["gunicorn", "--access-logfile", "-", "--log-level", "INFO", "--bind", "0.0.0.0:5000", "api:app"]
